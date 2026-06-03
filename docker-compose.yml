@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  # MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - iot-network
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+  # Sensor de Temperatura
+  temp_sensor:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    depends_on:
+      - mosquitto
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - iot-network
+    restart: unless-stopped
+    command: python temp_sensor.py
+
+  # Sensor de Humedad
+  humidity_sensor:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    depends_on:
+      - mosquitto
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - iot-network
+    restart: unless-stopped
+    command: python humidity_sensor.py
+
+  # Gateway/Publicador
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    depends_on:
+      - mosquitto
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AWS_REGION=us-east-1
+    networks:
+      - iot-network
+    restart: unless-stopped
+    command: python publisher.py
+
+  # PostgreSQL - Base de datos histórica
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: sensors_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - iot-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API FastAPI
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mosquitto
+      - postgres
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_HOST=postgres
+      - DB_NAME=sensors_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - AWS_REGION=us-east-1
+    networks:
+      - iot-network
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Adminer - Interfaz para PostgreSQL (opcional)
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+  postgres_data:
+
+networks:
+  iot-network:
+    driver: bridge
