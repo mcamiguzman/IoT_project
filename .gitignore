@@ -57,7 +57,6 @@ lambdas_build/
 # Logs
 logs/
 *.log
-*.txt
 
 # OS
 .DS_Store
