@@ -1,4 +1,12 @@
 # IAM Role para Lambda
+# NOTA: En AWS Learner Lab, no puedes crear roles IAM, así que usamos el pre-existente LabRole.
+
+# Data source: rol pre-existente del Learner Lab
+data "aws_iam_role" "lab_role" {
+  name = "LabRole"
+}
+
+# IAM Role para Lambda
 # NOTA: En AWS Learner Lab, no puedes crear roles IAM.
 # Se debe usar un rol pre-existente. Especifica el ARN en la variable lambda_role_arn
 # o descomenta esto si tienes permisos en tu cuenta AWS.

@@ -13,10 +13,10 @@ output "sqs_queue_url" {
   description = "SQS queue URL"
 }
 
-# output "lambda_role_arn" {
-#   value       = aws_iam_role.lambda_role.arn
-#   description = "Lambda IAM role ARN (comentado para Learner Lab)"
-# }
+output "lambda_role_arn" {
+  value       = local.lambda_role_arn
+  description = "Lambda IAM role ARN (usa LabRole en Learner Lab)"
+}
 
 output "cloudwatch_log_group" {
   value       = aws_cloudwatch_log_group.iot_logs.name

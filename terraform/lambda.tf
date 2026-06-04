@@ -1,6 +1,6 @@
 locals {
-  # Usar rol especificado o rol por defecto del laboratorio
-  lambda_role_arn = var.lambda_role_arn != "" ? var.lambda_role_arn : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/voclabs"
+  # Usar rol especificado o rol LabRole pre-existente del Learner Lab
+  lambda_role_arn = var.lambda_role_arn != "" ? var.lambda_role_arn : data.aws_iam_role.lab_role.arn
 }
 
 # Data archive para localizar los archivos zip de las Lambdas
@@ -92,14 +92,14 @@ resource "aws_lambda_function" "temperature_alert" {
   }
 }
 
-# Event source mapping: DynamoDB Stream → Lambda
-resource "aws_lambda_event_source_mapping" "dynamodb_to_lambda" {
-  event_source_arn  = aws_dynamodb_table.sensor_data.stream_arn
-  function_name     = aws_lambda_function.temperature_alert.function_name
-  enabled           = true
-  batch_size        = 100
-  starting_position = "LATEST"
-}
+# Event source mapping: DynamoDB Stream → Lambda (DESHABILITADO - requiere stream_enabled en la tabla)
+# resource "aws_lambda_event_source_mapping" "dynamodb_to_lambda" {
+#   event_source_arn  = aws_dynamodb_table.sensor_data.stream_arn
+#   function_name     = aws_lambda_function.temperature_alert.function_name
+#   enabled           = true
+#   batch_size        = 100
+#   starting_position = "LATEST"
+# }
 
 # Lambda 3: CloudWatch Logs
 resource "aws_lambda_function" "cloudwatch_logs" {
