@@ -1,4 +1,4 @@
-.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas
+.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas tf-import
 
 up:
 	docker compose up -d --build
@@ -38,3 +38,10 @@ deploy: tf-init tf-apply up
 
 destroy: down tf-destroy clean
 	@echo "✓ Proyecto completamente destruido"
+
+# Importa recursos huérfanos comunes (úsalo si un apply falla con ResourceAlreadyExistsException)
+# Reemplaza los UUIDs/IDs por los que AWS devuelve en el mensaje de error.
+tf-import:
+	cd terraform && \
+		terraform import aws_cloudwatch_log_group.iot_logs /aws/iot/sensors/dev || true
+	@echo "✓ Si el log group ya estaba en el estado, el import se ignoró. Re-ejecuta 'make deploy'."
