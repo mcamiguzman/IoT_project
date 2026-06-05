@@ -7,7 +7,7 @@ from datetime import datetime
 # Configuración MQTT Local
 MQTT_BROKER = "mosquitto"
 MQTT_PORT = 1883
-MQTT_TOPICS = ["sensors/temperature", "sensors/humidity"]
+MQTT_TOPICS = ["sensors/temperature", "sensors/humidity", "sensors/pressure"]
 
 # Configuración AWS
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
@@ -43,6 +43,8 @@ class MQTTGateway:
                 self.process_temperature(payload)
             elif "humidity" in msg.topic:
                 self.process_humidity(payload)
+            elif "pressure" in msg.topic:
+                self.process_pressure(payload)
                 
         except json.JSONDecodeError:
             print(f"Error decodificando JSON: {msg.payload}")
@@ -70,6 +72,15 @@ class MQTTGateway:
             # Ejemplo: self.save_to_dynamodb("humidity", data)
         except Exception as e:
             print(f"Error procesando humedad: {e}")
+    
+    def process_pressure(self, data):
+        """Procesar datos de presión"""
+        try:
+            # Aquí puedes agregar lógica para guardar en DynamoDB, S3, etc.
+            print(f"Procesando presión: {data['value']} hPa")
+            # Ejemplo: self.save_to_dynamodb("pressure", data)
+        except Exception as e:
+            print(f"Error procesando presión: {e}")
     
     def save_to_dynamodb(self, table_name, data):
         """Guardar datos en DynamoDB"""

@@ -20,13 +20,25 @@ CREATE TABLE IF NOT EXISTS humidity_readings (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabla de lecturas de presión
+CREATE TABLE IF NOT EXISTS pressure_readings (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    sensor_id VARCHAR(50),
+    value DECIMAL(10, 2),
+    unit VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índices para mejorar rendimiento en consultas por timestamp
 CREATE INDEX idx_temperature_timestamp ON temperature_readings(timestamp DESC);
 CREATE INDEX idx_humidity_timestamp ON humidity_readings(timestamp DESC);
+CREATE INDEX idx_pressure_timestamp ON pressure_readings(timestamp DESC);
 
 -- Índices para búsquedas por sensor_id
 CREATE INDEX idx_temperature_sensor_id ON temperature_readings(sensor_id);
 CREATE INDEX idx_humidity_sensor_id ON humidity_readings(sensor_id);
+CREATE INDEX idx_pressure_sensor_id ON pressure_readings(sensor_id);
 
 -- Tabla de eventos/alertas
 CREATE TABLE IF NOT EXISTS alerts (

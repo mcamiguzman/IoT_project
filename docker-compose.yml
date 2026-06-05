@@ -44,6 +44,20 @@ services:
     restart: unless-stopped
     command: python humidity_sensor.py
 
+  # Sensor de Presión
+  pressure_sensor:
+    build:
+      context: ./sensors
+      dockerfile: Dockerfile
+    depends_on:
+      - mosquitto
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - iot-network
+    restart: unless-stopped
+    command: python pressure_sensor.py
+
   # Gateway/Publicador
   gateway:
     build:

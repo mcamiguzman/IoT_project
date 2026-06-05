@@ -65,6 +65,7 @@ async def root():
             "sensors": "/sensors",
             "temperature": "/sensors/temperature",
             "humidity": "/sensors/humidity",
+            "pressure": "/sensors/pressure",
             "current": "/sensors/current",
             "history": "/sensors/history"
         }
@@ -76,7 +77,8 @@ async def get_all_sensors():
     return {
         "sensors": [
             {"id": "temp-001", "type": "temperature", "unit": "celsius"},
-            {"id": "humidity-001", "type": "humidity", "unit": "percent"}
+            {"id": "humidity-001", "type": "humidity", "unit": "percent"},
+            {"id": "pressure-001", "type": "pressure", "unit": "hPa"}
         ]
     }
 
@@ -152,6 +154,42 @@ async def get_humidity(hours: int = 24):
         print(f"Error obteniendo humedad: {e}")
         return {"error": str(e), "data": []}
 
+@app.get("/sensors/pressure")
+async def get_pressure(hours: int = 24):
+    """Obtener datos de presión de las últimas N horas"""
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return {"error": "No se pudo conectar a la base de datos", "data": []}
+        
+        cursor = conn.cursor()
+        query = """
+            SELECT timestamp, value, unit, sensor_id 
+            FROM pressure_readings 
+            WHERE timestamp > NOW() - INTERVAL '%s hours'
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """
+        cursor.execute(query, (hours,))
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        readings = [
+            {
+                "timestamp": str(row[0]),
+                "value": row[1],
+                "unit": row[2],
+                "sensor_id": row[3]
+            }
+            for row in results
+        ]
+        
+        return {"sensor_id": "pressure-001", "readings": readings}
+    except Exception as e:
+        print(f"Error obteniendo presión: {e}")
+        return {"error": str(e), "data": []}
+
 @app.get("/sensors/current")
 async def get_current_reading():
     """Obtener lecturas actuales"""
@@ -176,12 +214,20 @@ async def get_current_reading():
         """)
         humidity_row = cursor.fetchone()
         
+        # Última presión
+        cursor.execute("""
+            SELECT value, timestamp FROM pressure_readings 
+            ORDER BY timestamp DESC LIMIT 1
+        """)
+        pressure_row = cursor.fetchone()
+        
         cursor.close()
         conn.close()
         
         return {
             "temperature": {"value": temp_row[0], "timestamp": str(temp_row[1])} if temp_row else None,
-            "humidity": {"value": humidity_row[0], "timestamp": str(humidity_row[1])} if humidity_row else None
+            "humidity": {"value": humidity_row[0], "timestamp": str(humidity_row[1])} if humidity_row else None,
+            "pressure": {"value": pressure_row[0], "timestamp": str(pressure_row[1])} if pressure_row else None
         }
     except Exception as e:
         print(f"Error obteniendo lecturas actuales: {e}")
@@ -239,6 +285,8 @@ async def post_reading(data: SensorReading):
             table_name = "temperature_readings"
         elif "humidity" in data.sensor_id.lower():
             table_name = "humidity_readings"
+        elif "pressure" in data.sensor_id.lower():
+            table_name = "pressure_readings"
         else:
             raise HTTPException(status_code=400, detail="sensor_id inválido")
         

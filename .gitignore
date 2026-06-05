@@ -53,6 +53,7 @@ lambdas_build/
 
 # Database
 .pgdata/
+project_template/
 
 # Logs
 logs/

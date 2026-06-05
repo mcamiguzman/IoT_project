@@ -123,6 +123,11 @@ make tf-apply
 - Publica cada 5 segundos en `sensors/humidity`
 - Docker: `humidity_sensor`
 
+### Sensor de Presión Atmosférica
+- Genera valores aleatorios entre 980pHa y 1040pHa
+- Publica cada 5 segundos en `sensors/pressure`
+- Docker: `pressure_sensor`
+
 ### Gateway MQTT
 - Se suscribe a topics de sensores
 - Reenvía datos a AWS (DynamoDB, S3, SQS)
