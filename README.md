@@ -1,3 +1,7 @@
+# Hecho por:
+
+Maria Camila Guzman Bolaños y Mateo Ramirez Gutierrez
+
 # IoT Project Template
 
 Sistema IoT completo que incluye sensores de temperatura y humedad, gateway MQTT, API FastAPI e integración con AWS.
