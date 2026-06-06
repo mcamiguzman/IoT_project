@@ -1,4 +1,4 @@
-.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas tf-import run-gateway
+.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas tf-import tf-import-existing aws-logs logs tf-logs run-gateway
 
 AWS_REGION ?= us-east-1
 
@@ -48,12 +48,39 @@ tf-import:
 		terraform import aws_cloudwatch_log_group.iot_logs /aws/iot/sensors/dev || true
 	@echo "✓ Si el log group ya estaba en el estado, el import se ignoró. Re-ejecuta 'make deploy'."
 
+# Importar recursos ya existentes en la cuenta para evitar conflictos al aplicar
+# cuando Terraform no tiene el estado presente pero el recurso ya existe.
+tf-import-existing:
+	@cd terraform && terraform import aws_cloudwatch_log_group.iot_logs /aws/iot/sensors/dev || true
+	@cd terraform && terraform import aws_dynamodb_table.sensor_data sensor-data-dev || true
+	@cd terraform && terraform import aws_s3_bucket.sensor_archive iot-sensor-archive-dev-665031542744 || true
+	@cd terraform && terraform import aws_sqs_queue.sensor_queue iot-sensor-queue-dev || true
+	@cd terraform && terraform import aws_lambda_function.process_s3 iot-process-s3-dev || true
+	@cd terraform && terraform import aws_lambda_function.temperature_alert iot-temperature-alert-dev || true
+	@cd terraform && terraform import aws_lambda_function.cloudwatch_logs iot-cloudwatch-logs-dev || true
+	@cd terraform && terraform import aws_iot_thing.sensor sensor-thing-dev || true
+	@cd terraform && terraform import aws_iot_policy.device_policy iot-device-policy-dev || true
+	@cd terraform && terraform import aws_iot_topic_rule.to_sqs iot_rule_to_sqs_dev || true
+	@UUID=$$(aws sts get-caller-identity --query Account --output text --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)); \
+	QUEUE_ARN=$$(printf "arn:aws:sqs:%s:%s:iot-sensor-queue-dev" "$(AWS_REGION)" "$$UUID"); \
+	MAPPING_ID=$$(aws lambda list-event-source-mappings --function-name iot-cloudwatch-logs-dev --event-source-arn "$$QUEUE_ARN" --query 'EventSourceMappings[0].UUID' --output text --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)); \
+	if [ "$$MAPPING_ID" != "None" ] && [ -n "$$MAPPING_ID" ]; then \
+		cd terraform && terraform import aws_lambda_event_source_mapping.sqs_to_lambda "$$MAPPING_ID" || true; \
+	else \
+		echo "Aviso: no se encontró Event Source Mapping para iot-cloudwatch-logs-dev"; \
+	fi
+	@echo "✓ Intento de importación completado. Revisa errores y vuelve a ejecutar 'make deploy'."
+
 aws-logs:
 	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE y AWS_REGION)."
 	@if [ -z "$(LOG_GROUP)" ]; then \
 		echo "ERROR: define LOG_GROUP. Ej: LOG_GROUP=/aws/iot/sensors/dev"; exit 1; \
 	fi
 	@aws logs tail "$(LOG_GROUP)" --follow --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
+
+logs: aws-logs
+
+tf-logs: aws-logs
 
 run-gateway:
 	@echo "Iniciando gateway: resolviendo AWS IoT endpoint..."

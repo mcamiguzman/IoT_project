@@ -1,7 +1,7 @@
 // IoT Core resources: Thing, Policy, Certificate, Topic Rule → SQS
 
 locals {
-  iot_role_arn = var.iot_role_arn != "" ? var.iot_role_arn : aws_iam_role.iot_topic_rule_role.arn
+  iot_role_arn = var.iot_role_arn != "" ? var.iot_role_arn : aws_iam_role.iot_topic_rule_role[0].arn
 }
 
 # Thing
@@ -43,9 +43,11 @@ resource "aws_iot_policy" "device_policy" {
 # them manually or via a provisioning process. The `aws_iot_policy` above
 # is available to be attached to device certificates when provisioning is done.
 
-# IAM role for IoT Topic Rule to send messages to SQS (creado solo si no se pasa var.iot_role_arn)
+# IAM role for IoT Topic Rule to send messages to SQS
+# Solo se crea si no se pasa var.iot_role_arn
 resource "aws_iam_role" "iot_topic_rule_role" {
-  name = "iot-topic-rule-role-${var.environment}"
+  count = var.iot_role_arn == "" ? 1 : 0
+  name  = "iot-topic-rule-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -60,8 +62,9 @@ resource "aws_iam_role" "iot_topic_rule_role" {
 }
 
 resource "aws_iam_role_policy" "iot_topic_rule_policy" {
-  name = "iot-topic-rule-policy-${var.environment}"
-  role = aws_iam_role.iot_topic_rule_role.id
+  count = var.iot_role_arn == "" ? 1 : 0
+  name  = "iot-topic-rule-policy-${var.environment}"
+  role  = aws_iam_role.iot_topic_rule_role[0].id
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -87,6 +90,4 @@ resource "aws_iot_topic_rule" "to_sqs" {
     queue_url  = aws_sqs_queue.sensor_queue.url
     use_base64 = false
   }
-
-  depends_on = [aws_iam_role_policy.iot_topic_rule_policy]
 }

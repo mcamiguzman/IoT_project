@@ -17,7 +17,7 @@ variable "lambda_role_arn" {
 }
 
 variable "iot_role_arn" {
-  description = "ARN del rol IAM existente que usará AWS IoT Topic Rules para acciones (opcional)"
+  description = "ARN del rol IAM existente que usará AWS IoT Topic Rules para acciones. Requerido si el usuario no puede crear roles IAM."
   type        = string
   default     = ""
 }

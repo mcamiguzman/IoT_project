@@ -107,6 +107,19 @@ make tf-init
 make tf-apply
 ```
 
+> Si ya existen recursos en AWS desde un deploy previo, importa primero el estado para evitar errores de recurso duplicado:
+>
+```bash
+make tf-import-existing
+```
+
+> Si no tienes permiso para crear roles IAM, usa un rol existente con permisos `sqs:SendMessage` y pásalo como variable:
+>
+```bash
+export TF_VAR_iot_role_arn="arn:aws:iam::123456789012:role/mi-rol-iot"
+make tf-apply
+```
+
 ### 3. Recursos creados
 
 - **DynamoDB Table**: `sensor-data-dev`
