@@ -1,4 +1,6 @@
-.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas tf-import
+.PHONY: up down tf-init tf-apply deploy clean destroy build-lambdas tf-import run-gateway
+
+AWS_REGION ?= us-east-1
 
 up:
 	docker compose up -d --build
@@ -45,3 +47,25 @@ tf-import:
 	cd terraform && \
 		terraform import aws_cloudwatch_log_group.iot_logs /aws/iot/sensors/dev || true
 	@echo "✓ Si el log group ya estaba en el estado, el import se ignoró. Re-ejecuta 'make deploy'."
+
+aws-logs:
+	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE y AWS_REGION)."
+	@if [ -z "$(LOG_GROUP)" ]; then \
+		echo "ERROR: define LOG_GROUP. Ej: LOG_GROUP=/aws/iot/sensors/dev"; exit 1; \
+	fi
+	@aws logs tail "$(LOG_GROUP)" --follow --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
+
+run-gateway:
+	@echo "Iniciando gateway: resolviendo AWS IoT endpoint..."
+	@EP=""; \
+	if command -v terraform >/dev/null 2>&1; then \
+		EP=$$(cd terraform && terraform output -raw iot_endpoint 2>/dev/null || true); \
+	fi; \
+	if [ -z "$$EP" ]; then \
+		EP=$$(aws iot describe-endpoint --endpoint-type iot:Data-ATS --query endpointAddress --output text --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),) 2>/dev/null || true); \
+	fi; \
+	if [ -z "$$EP" ]; then \
+		echo "ERROR: no se pudo determinar AWS IoT endpoint (ni terraform output ni aws cli)."; exit 1; \
+	fi; \
+	@echo "Usando endpoint: $$EP"; \
+	AWS_IOT_ENDPOINT=$$EP AWS_REGION=$(AWS_REGION) python gateway/publisher.py

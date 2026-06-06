@@ -37,3 +37,18 @@ output "lambda_cloudwatch_logs_arn" {
   value       = aws_lambda_function.cloudwatch_logs.arn
   description = "Lambda function ARN for CloudWatch logs"
 }
+
+output "iot_thing_name" {
+  value       = aws_iot_thing.sensor.name
+  description = "Nombre del Thing generado en AWS IoT Core"
+}
+
+output "iot_policy_name" {
+  value       = aws_iot_policy.device_policy.name
+  description = "Nombre de la policy de IoT para dispositivos"
+}
+
+output "iot_topic_rule" {
+  value       = aws_iot_topic_rule.to_sqs.name
+  description = "Nombre de la IoT Topic Rule que enruta mensajes a SQS"
+}
