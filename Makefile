@@ -78,9 +78,11 @@ aws-logs:
 	fi
 	@aws logs tail "$(LOG_GROUP)" --follow --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
 
-logs: aws-logs
+logs: 
+	docker compose logs -f
 
-tf-logs: aws-logs
+tf-logs: 
+	aws-logs
 
 run-gateway:
 	@echo "Iniciando gateway: resolviendo AWS IoT endpoint..."
