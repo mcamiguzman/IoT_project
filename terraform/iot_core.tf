@@ -73,12 +73,63 @@ resource "aws_iam_role_policy" "iot_topic_rule_policy" {
         Effect = "Allow",
         Action = ["sqs:SendMessage"],
         Resource = [aws_sqs_queue.sensor_queue.arn]
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = [
+          aws_cloudwatch_log_group.iot_logs.arn,
+          "${aws_cloudwatch_log_group.iot_logs.arn}:*"
+        ]
       }
     ]
   })
 }
 
+# Política para el rol existente (LabRole) cuando se pasa por variable
+data "aws_iam_policy_document" "iot_topic_rule_extra" {
+  count = var.iot_role_arn != "" ? 1 : 0
+
+  statement {
+    sid    = "IoTToSQS"
+    effect = "Allow"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.sensor_queue.arn]
+  }
+
+  statement {
+    sid    = "IoTToCloudWatch"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      aws_cloudwatch_log_group.iot_logs.arn,
+      "${aws_cloudwatch_log_group.iot_logs.arn}:*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "iot_topic_rule_extra" {
+  count      = var.iot_role_arn != "" ? 1 : 0
+  name       = "iot-topic-rule-extra-${var.environment}"
+  policy     = data.aws_iam_policy_document.iot_topic_rule_extra[0].json
+  tags       = {}
+  tags_all   = {}
+}
+
+resource "aws_iam_role_policy_attachment" "iot_topic_rule_extra_attach" {
+  count      = var.iot_role_arn != "" ? 1 : 0
+  role       = split("/", var.iot_role_arn)[length(split("/", var.iot_role_arn)) - 1]
+  policy_arn = aws_iam_policy.iot_topic_rule_extra[0].arn
+}
+
 # Topic Rule: enrutar mensajes desde 'sensors/#' hacia la cola SQS
+# y también registrar cada mensaje en CloudWatch Logs para visibilidad.
 resource "aws_iot_topic_rule" "to_sqs" {
   name        = "iot_rule_to_sqs_${replace(var.environment, "-", "_")}"
   sql         = "SELECT * FROM 'sensors/#'"
@@ -89,5 +140,10 @@ resource "aws_iot_topic_rule" "to_sqs" {
     role_arn   = local.iot_role_arn
     queue_url  = aws_sqs_queue.sensor_queue.url
     use_base64 = false
+  }
+
+  cloudwatch_logs {
+    role_arn = local.iot_role_arn
+    log_group_name = aws_cloudwatch_log_group.iot_logs.name
   }
 }

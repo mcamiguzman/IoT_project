@@ -98,6 +98,7 @@ tf-logs:
 
 run-gateway:
 	@echo "Iniciando gateway: resolviendo AWS IoT endpoint..."
+	@python -c "import paho.mqtt.client" 2>/dev/null || pip install --quiet paho-mqtt boto3
 	@EP=""; \
 	if command -v terraform >/dev/null 2>&1; then \
 		EP=$$(cd terraform && terraform output -raw iot_endpoint 2>/dev/null || true); \
@@ -108,5 +109,5 @@ run-gateway:
 	if [ -z "$$EP" ]; then \
 		echo "ERROR: no se pudo determinar AWS IoT endpoint (ni terraform output ni aws cli)."; exit 1; \
 	fi; \
-	@echo "Usando endpoint: $$EP"; \
-	AWS_IOT_ENDPOINT=$$EP AWS_REGION=$(AWS_REGION) python gateway/publisher.py
+	echo "Usando endpoint: $$EP"; \
+	MQTT_BROKER=$${MQTT_BROKER:-localhost} AWS_IOT_ENDPOINT=$$EP AWS_REGION=$(AWS_REGION) python gateway/publisher.py

@@ -2,88 +2,113 @@ import paho.mqtt.client as mqtt
 import json
 import boto3
 import os
+import time
 from datetime import datetime
 
 # Configuración MQTT Local
-MQTT_BROKER = "mosquitto"
-MQTT_PORT = 1883
+# Por defecto usa el nombre del servicio "mosquitto" en docker compose.
+# Si MQTT_BROKER está definido como variable de entorno, se respeta ese valor
+# (útil cuando corres el gateway fuera de compose: e.g. MQTT_BROKER=localhost).
+MQTT_BROKER = os.getenv("MQTT_BROKER", "mosquitto")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPICS = ["sensors/temperature", "sensors/humidity", "sensors/pressure"]
 
 # Configuración AWS
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_ENDPOINT = os.getenv("AWS_IOT_ENDPOINT")
-# Si no está definida, intentar descubrir el endpoint a través de las credenciales configuradas (aws configure)
-if not AWS_ENDPOINT:
-    try:
-        print("Intentando descubrir AWS IoT endpoint usando las credenciales configuradas...")
-        iot_client = boto3.client("iot", region_name=AWS_REGION)
-        resp = iot_client.describe_endpoint(endpointType="iot:Data-ATS")
-        AWS_ENDPOINT = resp.get("endpointAddress")
-        if not AWS_ENDPOINT:
-            raise Exception("describe_endpoint no devolvió endpointAddress")
-        print(f"Endpoint detectado: {AWS_ENDPOINT}")
-    except Exception as e:
-        raise SystemExit(
-            "ERROR: no se encontró AWS_IOT_ENDPOINT y no se pudo descubrir automáticamente. "
-            "Asegúrate de haber ejecutado 'aws configure' con credenciales válidas y de que la IAM tenga permiso 'iot:DescribeEndpoint'. Detalle: " + str(e)
-        )
+
+
+def discover_iot_endpoint():
+    """Descubre el AWS IoT endpoint con reintentos exponenciales."""
+    if AWS_ENDPOINT:
+        return AWS_ENDPOINT
+    backoff = 2
+    for attempt in range(1, 11):
+        try:
+            print(f"[{attempt}] Intentando descubrir AWS IoT endpoint...")
+            iot_client = boto3.client("iot", region_name=AWS_REGION)
+            resp = iot_client.describe_endpoint(endpointType="iot:Data-ATS")
+            endpoint = resp.get("endpointAddress")
+            if endpoint:
+                print(f"Endpoint detectado: {endpoint}")
+                return endpoint
+        except Exception as e:
+            print(f"[{attempt}] No se pudo descubrir el endpoint: {e}")
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 30)
+    raise SystemExit(
+        "ERROR: no se pudo descubrir AWS_IOT_ENDPOINT tras varios intentos. "
+        "Verifica que las credenciales AWS estén disponibles dentro del contenedor "
+        "(`docker exec gateway-1 aws sts get-caller-identity`)."
+    )
 
 class MQTTGateway:
-    def __init__(self):
-        self.local_client = mqtt.Client("gateway-subscriber")
+    def __init__(self, endpoint: str | None = None):
+        resolved_endpoint = endpoint or AWS_ENDPOINT
+        if not resolved_endpoint:
+            raise SystemExit(
+                "ERROR: AWS_IOT_ENDPOINT no está definido. "
+                "Pásalo como argumento o exporta la variable de entorno."
+            )
+
+        # paho-mqtt 2.x requiere callback_api_version explícito
+        self.local_client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+            client_id="gateway-subscriber",
+        )
         self.local_client.on_connect = self.on_connect
         self.local_client.on_message = self.on_message
         self.local_client.on_disconnect = self.on_disconnect
-        
+
         # Cliente para AWS IoT (opcional si usamos credenciales)
         self.dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
         self.s3 = boto3.client("s3", region_name=AWS_REGION)
-        endpoint_url = f"https://{AWS_ENDPOINT}"
+        endpoint_url = f"https://{resolved_endpoint}"
         try:
             self.iot_data = boto3.client("iot-data", region_name=AWS_REGION, endpoint_url=endpoint_url)
             print(f"Gateway: cliente IoT Data inicializado en {endpoint_url}")
         except Exception as e:
             raise SystemExit(f"ERROR: no se pudo inicializar iot-data client: {e}")
-        
-    def on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
+
+    def on_connect(self, client, userdata, flags, reason_code, properties=None):
+        if reason_code == 0:
             print("Gateway: Conectado a MQTT local")
             for topic in MQTT_TOPICS:
                 self.local_client.subscribe(topic)
                 print(f"Suscrito a: {topic}")
         else:
-            print(f"Gateway: Error conexión {rc}")
-    
-    def on_message(self, client, userdata, msg):
+            print(f"Gateway: Error conexión {reason_code}")
+
+    def on_message(self, client, userdata, message):
         payload = None
         try:
-            payload = json.loads(msg.payload.decode())
-            print(f"Mensaje recibido de {msg.topic}: {payload}")
-            
+            payload = json.loads(message.payload.decode())
+            print(f"Mensaje recibido de {message.topic}: {payload}")
+
             # Procesar según el tipo de sensor
-            if "temperature" in msg.topic:
+            if "temperature" in message.topic:
                 self.process_temperature(payload)
-            elif "humidity" in msg.topic:
+            elif "humidity" in message.topic:
                 self.process_humidity(payload)
-            elif "pressure" in msg.topic:
+            elif "pressure" in message.topic:
                 self.process_pressure(payload)
-                
+
         except json.JSONDecodeError:
-            print(f"Error decodificando JSON: {msg.payload}")
+            print(f"Error decodificando JSON: {message.payload}")
         except Exception as e:
             print(f"Error procesando mensaje: {e}")
         finally:
             # Reenviar a AWS IoT (obligatorio)
             try:
-                publish_payload = json.dumps(payload) if payload is not None else msg.payload.decode()
-                self.iot_data.publish(topic=msg.topic, qos=0, payload=publish_payload)
-                print(f"Reenviado a AWS IoT: {msg.topic}")
+                publish_payload = json.dumps(payload) if payload is not None else message.payload.decode()
+                self.iot_data.publish(topic=message.topic, qos=0, payload=publish_payload)
+                print(f"Reenviado a AWS IoT: {message.topic}")
             except Exception as e:
                 print(f"Error publicando en AWS IoT: {e}")
-    
-    def on_disconnect(self, client, userdata, rc):
-        if rc != 0:
-            print(f"Gateway: Desconexión inesperada {rc}")
+
+    def on_disconnect(self, client, userdata, flags=None, reason_code=None, properties=None):
+        if reason_code != 0:
+            print(f"Gateway: Desconexión inesperada {reason_code}")
     
     def process_temperature(self, data):
         """Procesar datos de temperatura"""
@@ -139,7 +164,8 @@ class MQTTGateway:
         self.local_client.disconnect()
 
 if __name__ == "__main__":
-    gateway = MQTTGateway()
+    AWS_ENDPOINT = discover_iot_endpoint()
+    gateway = MQTTGateway(endpoint=AWS_ENDPOINT)
     try:
         gateway.connect()
     except KeyboardInterrupt:
