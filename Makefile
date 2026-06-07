@@ -72,11 +72,23 @@ tf-import-existing:
 	@echo "✓ Intento de importación completado. Revisa errores y vuelve a ejecutar 'make deploy'."
 
 aws-logs:
-	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE y AWS_REGION)."
+	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE, AWS_REGION, SINCE y FOLLOW=no)."
 	@if [ -z "$(LOG_GROUP)" ]; then \
 		echo "ERROR: define LOG_GROUP. Ej: LOG_GROUP=/aws/iot/sensors/dev"; exit 1; \
 	fi
-	@aws logs tail "$(LOG_GROUP)" --follow --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
+	@echo "Nota: aws logs tail esperará nuevos eventos hasta Ctrl+C si no hay salida inmediata."
+	@FOLLOW_FLAG=""; \
+	if [ "$(FOLLOW)" = "no" ]; then \
+		FOLLOW_FLAG=""; \
+	else \
+		FOLLOW_FLAG="--follow"; \
+	fi; \
+	if [ -n "$(SINCE)" ]; then \
+		SINCE_FLAG="--since $(SINCE)"; \
+	else \
+		SINCE_FLAG=""; \
+	fi; \
+	aws logs tail "$(LOG_GROUP)" $$FOLLOW_FLAG $$SINCE_FLAG --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
 
 logs: 
 	docker compose logs -f
