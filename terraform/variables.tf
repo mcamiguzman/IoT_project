@@ -22,6 +22,7 @@ variable "iot_role_arn" {
   default     = ""
 }
 
+
 variable "iot_thing_name" {
   description = "Nombre base para los Things de IoT"
   type        = string
