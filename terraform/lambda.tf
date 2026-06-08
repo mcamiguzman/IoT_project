@@ -35,15 +35,12 @@ resource "aws_lambda_function" "process_s3" {
 
   environment {
     variables = {
-      DB_HOST     = split(":", aws_db_instance.sensors.endpoint)[0]
-      DB_PORT     = "5432"
-      DB_NAME     = aws_db_instance.sensors.db_name
-      DB_USER     = aws_db_instance.sensors.username
-      DB_PASSWORD = random_password.rds_password.result
+      DYNAMODB_TABLE  = aws_dynamodb_table.sensor_data.name
+      S3_BUCKET       = aws_s3_bucket.sensor_archive.id
     }
   }
 
-  depends_on = [aws_db_instance.sensors]
+  depends_on = []
 
   tags = {
     Name = "IoT Process S3 Lambda"

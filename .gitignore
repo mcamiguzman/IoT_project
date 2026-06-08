@@ -24,6 +24,7 @@ wheels/
 *.egg
 
 # Terraform
+certs/
 .terraform/
 .terraform.lock.hcl
 *.tfstate

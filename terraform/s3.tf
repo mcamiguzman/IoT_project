@@ -34,3 +34,38 @@ resource "aws_s3_bucket_lifecycle_configuration" "sensor_archive" {
     }
   }
 }
+
+# S3 bucket para resultados de Athena
+resource "aws_s3_bucket" "athena_results" {
+  bucket = "iot-athena-results-${var.environment}-${data.aws_caller_identity.current.account_id}"
+
+  tags = {
+    Name = "IoT Athena Query Results"
+  }
+}
+
+# Glue Database para catálogo de Athena
+resource "aws_glue_catalog_database" "sensor_history" {
+  name = "sensor_history_${var.environment}"
+
+  description = "Database for sensor historical data queries via Athena"
+}
+
+# Athena Workgroup para ejecutar queries
+resource "aws_athena_workgroup" "sensor_queries" {
+  name            = "sensor-queries-${var.environment}"
+  force_destroy   = true
+
+  configuration {
+    result_configuration {
+      output_location = "s3://${aws_s3_bucket.athena_results.bucket}/queries/"
+    }
+
+    enforce_workgroup_configuration    = true
+    publish_cloudwatch_metrics_enabled = true
+  }
+
+  tags = {
+    Name = "IoT Sensor Query Workgroup"
+  }
+}

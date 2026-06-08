@@ -1,1 +1,1 @@
-psycopg2-binary==2.9.9
+# boto3 ya viene preinstalado en el runtime de Lambda

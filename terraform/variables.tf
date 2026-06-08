@@ -17,14 +17,19 @@ variable "lambda_role_arn" {
 }
 
 variable "iot_role_arn" {
-  description = "ARN del rol IAM existente que usará AWS IoT Topic Rules para acciones. Requerido si el usuario no puede crear roles IAM."
+  description = "ARN del rol IAM existente que usará AWS IoT Topic Rules para acciones. Requerido en AWS Learner Lab cuando no puedes crear roles IAM."
   type        = string
   default     = ""
 }
-
 
 variable "iot_thing_name" {
   description = "Nombre base para los Things de IoT"
   type        = string
   default     = "sensor-thing"
+}
+
+variable "dynamodb_billing_mode" {
+  description = "Modo de facturación para DynamoDB"
+  type        = string
+  default     = "PAY_PER_REQUEST"
 }

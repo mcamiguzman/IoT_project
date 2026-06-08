@@ -158,8 +158,7 @@ resource "aws_iam_policy" "iot_topic_rule_extra" {
   count      = var.iot_role_arn != "" ? 1 : 0
   name       = "iot-topic-rule-extra-${var.environment}"
   policy     = data.aws_iam_policy_document.iot_topic_rule_extra[0].json
-  tags       = {}
-  tags_all   = {}
+  tags       = null
 }
 
 resource "aws_iam_role_policy_attachment" "iot_topic_rule_extra_attach" {
@@ -196,11 +195,13 @@ resource "aws_iot_topic_rule" "to_dynamodb" {
   enabled     = true
 
   dynamodb {
-    role_arn       = local.iot_role_arn
-    table_name     = aws_dynamodb_table.sensor_data.name
-    hash_key_field = "sensor_id"
+    role_arn        = local.iot_role_arn
+    table_name      = aws_dynamodb_table.sensor_data.name
+    hash_key_field  = "sensor_id"
+    hash_key_value  = "$${sensor_id}"
     range_key_field = "timestamp"
-    operation      = "PUT"
+    range_key_value = "$${ts}"
+    operation       = "PutItem"
   }
 }
 
@@ -215,7 +216,7 @@ resource "aws_iot_topic_rule" "to_s3" {
   s3 {
     role_arn   = local.iot_role_arn
     bucket_name = aws_s3_bucket.sensor_archive.id
-    key        = "sensors/\${year()}/\${month()}/\${day()}/\${hour()}\${minute()}-\${clientId()}.json"
+    key        = "sensors/$${timestamp()}-$${clientId()}.json"
     canned_acl = "private"
   }
 }

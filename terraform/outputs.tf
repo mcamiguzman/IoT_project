@@ -69,36 +69,7 @@ output "iot_endpoint_command" {
   description = "Comando para obtener el IoT endpoint"
 }
 
-# Outputs de RDS (desde database.tf)
-output "rds_endpoint" {
-  value       = aws_db_instance.sensors.endpoint
-  description = "RDS endpoint (host:port)"
-}
-
-output "rds_address" {
-  value       = aws_db_instance.sensors.address
-  description = "RDS hostname"
-}
-
-output "rds_port" {
-  value       = aws_db_instance.sensors.port
-  description = "RDS port"
-}
-
-output "rds_database" {
-  value       = aws_db_instance.sensors.db_name
-  description = "RDS database name"
-}
-
-output "rds_username" {
-  value       = aws_db_instance.sensors.username
-  description = "RDS master username"
-}
-
-output "rds_credentials_file" {
-  value       = local_file.rds_credentials.filename
-  description = "Archivo con credenciales RDS (JSON)"
-}
+# Nota: Los outputs de RDS están definidos en database.tf para evitar duplicación
 
 # Topic Rules adicionales
 output "iot_topic_rule_dynamodb" {
@@ -120,7 +91,6 @@ output "resources_summary" {
     dynamodb_table      = aws_dynamodb_table.sensor_data.name
     s3_bucket           = aws_s3_bucket.sensor_archive.id
     sqs_queue_url       = aws_sqs_queue.sensor_queue.url
-    rds_endpoint        = aws_db_instance.sensors.endpoint
     cloudwatch_log_group = aws_cloudwatch_log_group.iot_logs.name
     iot_thing           = aws_iot_thing.sensor.name
   }

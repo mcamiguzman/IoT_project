@@ -73,14 +73,30 @@ Los certificados son **obligatorios** para autenticar el gateway con AWS IoT Cor
 
 ### Ejecutar Script de Provisioning
 
+**En PowerShell (Windows):**
+
 ```powershell
-# En PowerShell (Windows):
 .\scripts\provision-iot-certificates.ps1 -ThingName "sensor-thing-dev" -Region "us-east-1"
 ```
 
+**En Bash (Linux/Mac):**
+
 ```bash
-# En Bash (Linux/Mac):
 bash scripts/provision-iot-certificates.sh -t "sensor-thing-dev" -r "us-east-1"
+```
+
+**Opciones disponibles:**
+- `-t THING_NAME`: Nombre del Thing en IoT Core (default: sensor-thing-dev)
+- `-r REGION`: Región AWS (default: us-east-1)
+- `-d CERTS_DIR`: Directorio para certificados (default: ./certs)
+
+**Ejemplo alternativo (valores por defecto):**
+```bash
+# PowerShell
+.\scripts\provision-iot-certificates.ps1
+
+# Bash
+bash scripts/provision-iot-certificates.sh
 ```
 
 **Qué hace el script:**
