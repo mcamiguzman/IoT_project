@@ -10,6 +10,7 @@ set -euo pipefail
 THING_NAME="${THING_NAME:-sensor-thing-dev}"
 REGION="${REGION:-us-east-1}"
 CERTS_DIR="${CERTS_DIR:-.}/certs"
+POLICY_NAME="iot-device-policy-dev"
 
 # Colores ANSI
 CYAN='\033[0;36m'
@@ -83,9 +84,57 @@ KEY_FILE="$CERTS_DIR/iot-device-key.pem"
 CSR_FILE="$CERTS_DIR/iot-device.csr"
 ROOT_CA_FILE="$CERTS_DIR/AmazonRootCA1.pem"
 
-# Si ya existen certificados, saltar
+# ============================================================================
+# FUNCIÓN: Adjuntar política y Thing al certificado dado su ARN.
+# Se llama tanto en provisioning nuevo como cuando los certs ya existen,
+# para garantizar que la política y el Thing estén siempre adjuntados.
+# ============================================================================
+attach_certificate() {
+    local cert_arn="$1"
+
+    # Adjuntar política de IoT al certificado
+    write_step "Adjuntando política '$POLICY_NAME' al certificado..."
+    if aws iot attach-policy \
+        --policy-name "$POLICY_NAME" \
+        --target "$cert_arn" \
+        --region "$REGION" 2>/dev/null; then
+        write_success "Política adjuntada al certificado"
+    else
+        echo "  ℹ Nota: La política '$POLICY_NAME' puede no existir aún. Ejecuta 'make tf-apply' primero."
+    fi
+
+    # Adjuntar certificado al Thing en el registro de IoT Core
+    # Esto es necesario para que AWS IoT Core asocie la conexión con el Thing
+    write_step "Adjuntando certificado al Thing '$THING_NAME'..."
+    if aws iot attach-thing-principal \
+        --thing-name "$THING_NAME" \
+        --principal "$cert_arn" \
+        --region "$REGION" 2>/dev/null; then
+        write_success "Certificado adjuntado al Thing: $THING_NAME"
+    else
+        echo "  ℹ Nota: No se pudo adjuntar al Thing (puede que ya esté adjuntado, o el Thing aún no exista)."
+    fi
+}
+
+# Si ya existen certificados, re-verificar adjunciones y salir
 if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ] && [ -f "$ROOT_CA_FILE" ]; then
-    write_success "Certificados ya existen en $CERTS_DIR. Saltando provisioning."
+    write_success "Certificados ya existen en $CERTS_DIR."
+    echo "  Re-verificando adjunción de política y Thing..."
+
+    # Buscar el ARN del certificado activo más reciente en la cuenta
+    EXISTING_CERT_ARN=$(aws iot list-certificates \
+        --region "$REGION" \
+        --query "certificates[?status=='ACTIVE'].certificateArn" \
+        --output text 2>/dev/null | tr '\t' '\n' | head -1 || true)
+
+    if [ -n "$EXISTING_CERT_ARN" ]; then
+        attach_certificate "$EXISTING_CERT_ARN"
+    else
+        echo "  ℹ No se encontró un certificado ACTIVO en AWS IoT."
+        echo "    Si hay problemas de conexión, elimina la carpeta ./certs y vuelve a ejecutar este script."
+    fi
+
+    echo ""
     echo "Ubicaciones:"
     echo "  - Certificado: $CERT_FILE"
     echo "  - Clave privada: $KEY_FILE"
@@ -169,7 +218,7 @@ CERT_PEM=$(aws iot describe-certificate \
 echo "$CERT_PEM" > "$CERT_FILE"
 write_success "Certificado descargado: $CERT_FILE"
 
-# PASO 4: Descargar Amazon Root CA
+# PASO 4: Descargar Amazon Root CA oficial
 write_step "Descargando Amazon Root CA..."
 
 if ! curl -sS "https://www.amazontrust.com/repository/AmazonRootCA1.pem" -o "$ROOT_CA_FILE"; then
@@ -179,20 +228,10 @@ fi
 
 write_success "Amazon Root CA descargado: $ROOT_CA_FILE"
 
-# PASO 5: Adjuntar política de IoT al certificado
-write_step "Adjuntando política de IoT al certificado..."
+# PASO 5: Adjuntar política al certificado y certificado al Thing
+attach_certificate "$CERT_ARN"
 
-if aws iot attach-policy \
-    --policy-name "iot-device-policy-dev" \
-    --target "$CERT_ARN" \
-    --region "$REGION" 2>/dev/null; then
-    write_success "Política adjuntada al certificado"
-else
-    # La política puede no existir todavía si Terraform no ha corrido
-    echo "  ℹ Nota: Política no adjuntada (Terraform la adjuntará después)"
-fi
-
-# Copiar carpeta al directorio de MQTT Gateway
+# PASO 6: Copiar certificados al directorio del Gateway
 GATEWAY_CERTS_DIR="./gateway/certs"
 if [ ! -d "$GATEWAY_CERTS_DIR" ]; then
     mkdir -p "$GATEWAY_CERTS_DIR"
@@ -212,9 +251,8 @@ echo "  ├─ $CERT_FILE (certificado de dispositivo)"
 echo "  └─ $ROOT_CA_FILE (CA raíz de Amazon)"
 echo ""
 echo "Próximos pasos:"
-echo "  1. Verificar que los certificados estén en ./certs"
-echo "  2. Ejecutar: make tf-apply  (para crear recursos de Terraform)"
-echo "  3. Ejecutar: make up        (para iniciar docker-compose)"
+echo "  1. Si no lo has hecho: ejecutar make tf-apply"
+echo "  2. Ejecutar: make up  (para iniciar docker-compose)"
 echo ""
 echo "Para verificar la conexión:"
 echo "  docker compose logs gateway | grep 'Conectado a AWS'"

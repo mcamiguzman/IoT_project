@@ -10,7 +10,7 @@ import os
 import time
 import ssl
 import socket
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ============================================================================
@@ -27,6 +27,7 @@ MQTT_TOPICS_LOCAL = ["sensors/temperature", "sensors/humidity", "sensors/pressur
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_IOT_ENDPOINT = os.getenv("AWS_IOT_ENDPOINT")
+AWS_IOT_CLIENT_ID = os.getenv("AWS_IOT_CLIENT_ID", "sensor-thing-dev")
 AWS_IOT_PORT = 8883
 CERTS_DIR = Path(os.getenv("CERTS_DIR", "./certs"))
 
@@ -142,7 +143,7 @@ class MQTTGateway:
 
         self.aws_client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-            client_id="gateway-iot-publisher",
+            client_id=AWS_IOT_CLIENT_ID,
         )
 
         self.aws_client.on_connect = self._on_aws_connect
@@ -180,7 +181,7 @@ class MQTTGateway:
         try:
             payload = json.loads(message.payload.decode())
             self.message_count += 1
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             print(
                 f"\n[{self.message_count}] Mensaje recibido en {timestamp}"
@@ -253,7 +254,7 @@ class MQTTGateway:
             print("  Usando autenticación mutua TLS (certificados X.509)...")
 
             self.aws_client.connect(
-                self.aws_endpoint, AWS_IOT_PORT, keepalive=60, clean_start=True
+                self.aws_endpoint, AWS_IOT_PORT, keepalive=60
             )
             self.aws_client.loop_start()
 

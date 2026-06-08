@@ -41,9 +41,42 @@ $KeyFile = Join-Path $CertsDir "iot-device-key.pem"
 $CsrFile = Join-Path $CertsDir "iot-device.csr"
 $RootCAFile = Join-Path $CertsDir "AmazonRootCA1.pem"
 
-# Si ya existen certificados, saltar
+# Si ya existen certificados, re-verificar adjunciones en lugar de salir inmediatamente
 if ((Test-Path $CertFile) -and (Test-Path $KeyFile) -and (Test-Path $RootCAFile)) {
-    Write-Success "Certificados ya existen en $CertsDir. Saltando provisioning."
+    Write-Success "Certificados ya existen en $CertsDir."
+    Write-Host "  Re-verificando adjunción de política y Thing..."
+
+    try {
+        $ExistingCerts = aws iot list-certificates `
+            --region $Region `
+            --query "certificates[?status=='ACTIVE'].certificateArn" `
+            --output json 2>&1 | ConvertFrom-Json
+
+        if ($ExistingCerts -and $ExistingCerts.Count -gt 0) {
+            $ExistingCertArn = $ExistingCerts[0]
+
+            # Re-adjuntar política
+            aws iot attach-policy `
+                --policy-name "iot-device-policy-dev" `
+                --target $ExistingCertArn `
+                --region $Region 2>&1 | Out-Null
+            Write-Success "Política verificada/adjuntada al certificado"
+
+            # Re-adjuntar certificado al Thing
+            aws iot attach-thing-principal `
+                --thing-name $ThingName `
+                --principal $ExistingCertArn `
+                --region $Region 2>&1 | Out-Null
+            Write-Success "Certificado verificado/adjuntado al Thing: $ThingName"
+        } else {
+            Write-Host "  ℹ No se encontró un certificado ACTIVO en AWS IoT."
+            Write-Host "    Elimina ./certs y vuelve a ejecutar este script si hay problemas de conexión."
+        }
+    } catch {
+        Write-Host "  ℹ No se pudo verificar adjunciones: $_"
+    }
+
+    Write-Host ""
     Write-Host "Ubicaciones:"
     Write-Host "  - Certificado: $CertFile"
     Write-Host "  - Clave privada: $KeyFile"
@@ -153,14 +186,30 @@ try {
         --region $Region 2>&1 | Out-Null
     
     if ($LASTEXITCODE -ne 0) {
-        # La política puede no existir todavía si Terraform no ha corrido
-        # Esto no es un error crítico
-        Write-Host "  Nota: Política no adjuntada (Terraform la adjuntará después)"
+        Write-Host "  ℹ Nota: Política no adjuntada (ejecuta terraform apply primero)"
     } else {
         Write-Success "Política adjuntada al certificado"
     }
 } catch {
-    Write-Host "  Nota: No se pudo adjuntar política (se hará después): $_"
+    Write-Host "  ℹ No se pudo adjuntar política: $_"
+}
+
+# PASO 6: Adjuntar certificado al Thing en el registro de IoT Core
+# Esto es necesario para que AWS IoT Core asocie la conexión con el Thing
+Write-Step "Adjuntando certificado al Thing '$ThingName'..."
+try {
+    aws iot attach-thing-principal `
+        --thing-name $ThingName `
+        --principal $CertArn `
+        --region $Region 2>&1 | Out-Null
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  ℹ Nota: No se pudo adjuntar al Thing (puede que no exista aún)"
+    } else {
+        Write-Success "Certificado adjuntado al Thing: $ThingName"
+    }
+} catch {
+    Write-Host "  ℹ No se pudo adjuntar al Thing: $_"
 }
 
 # RESUMEN FINAL

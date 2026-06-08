@@ -36,8 +36,10 @@ tf-destroy:
 	cd terraform && terraform destroy -auto-approve
 	@echo "✓ Recursos AWS destruidos"
 
-deploy: tf-apply up
-	@echo "✓ Despliegue completado"
+tf-certificates:
+	./scripts/provision-iot-certificates.sh
+
+deploy: tf-apply tf-certificates up
 	@echo "✓ Despliegue completado"
 
 destroy: down tf-destroy clean

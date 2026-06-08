@@ -73,6 +73,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY-}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN-}
       - AWS_IOT_ENDPOINT=${AWS_IOT_ENDPOINT-}
+      - AWS_IOT_CLIENT_ID=${AWS_IOT_CLIENT_ID-sensor-thing-dev}
     volumes:
       - ~/.aws:/root/.aws:ro
     networks:

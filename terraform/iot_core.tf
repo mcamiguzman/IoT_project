@@ -28,16 +28,28 @@ resource "aws_iot_policy" "device_policy" {
     Version = "2012-10-17",
     Statement = [
       {
+        # Connect: el recurso debe ser tipo 'client'
         Effect = "Allow",
-        Action = [
-          "iot:Publish",
-          "iot:Subscribe",
-          "iot:Connect",
-          "iot:Receive"
-        ],
+        Action = ["iot:Connect"],
         Resource = [
-          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/*",
           "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:client/*"
+        ]
+      },
+      {
+        # Publish y Receive: el recurso debe ser tipo 'topic'
+        Effect = "Allow",
+        Action = ["iot:Publish", "iot:Receive"],
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topic/*"
+        ]
+      },
+      {
+        # Subscribe: el recurso DEBE ser tipo 'topicfilter' (no 'topic')
+        # Sin esto, AWS IoT Core rechaza/desconecta silenciosamente al cliente
+        Effect = "Allow",
+        Action = ["iot:Subscribe"],
+        Resource = [
+          "arn:aws:iot:${var.aws_region}:${data.aws_caller_identity.current.account_id}:topicfilter/*"
         ]
       }
     ]
