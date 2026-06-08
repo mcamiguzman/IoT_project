@@ -70,11 +70,31 @@ resource "aws_iam_role_policy" "iot_topic_rule_policy" {
     Version = "2012-10-17",
     Statement = [
       {
+        Sid    = "IoTToSQS"
         Effect = "Allow",
         Action = ["sqs:SendMessage"],
         Resource = [aws_sqs_queue.sensor_queue.arn]
       },
       {
+        Sid    = "IoTToDynamoDB"
+        Effect = "Allow",
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem"
+        ],
+        Resource = [aws_dynamodb_table.sensor_data.arn]
+      },
+      {
+        Sid    = "IoTToS3"
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ],
+        Resource = ["${aws_s3_bucket.sensor_archive.arn}/*"]
+      },
+      {
+        Sid    = "IoTToCloudWatch"
         Effect = "Allow",
         Action = [
           "logs:CreateLogStream",
@@ -98,6 +118,26 @@ data "aws_iam_policy_document" "iot_topic_rule_extra" {
     effect = "Allow"
     actions   = ["sqs:SendMessage"]
     resources = [aws_sqs_queue.sensor_queue.arn]
+  }
+
+  statement {
+    sid    = "IoTToDynamoDB"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem"
+    ]
+    resources = [aws_dynamodb_table.sensor_data.arn]
+  }
+
+  statement {
+    sid    = "IoTToS3"
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject"
+    ]
+    resources = ["${aws_s3_bucket.sensor_archive.arn}/*"]
   }
 
   statement {
@@ -128,11 +168,11 @@ resource "aws_iam_role_policy_attachment" "iot_topic_rule_extra_attach" {
   policy_arn = aws_iam_policy.iot_topic_rule_extra[0].arn
 }
 
-# Topic Rule: enrutar mensajes desde 'sensors/#' hacia la cola SQS
+# Topic Rule 1: enrutar mensajes desde 'sensors/+' hacia la cola SQS
 # y también registrar cada mensaje en CloudWatch Logs para visibilidad.
 resource "aws_iot_topic_rule" "to_sqs" {
   name        = "iot_rule_to_sqs_${replace(var.environment, "-", "_")}"
-  sql         = "SELECT * FROM 'sensors/#'"
+  sql         = "SELECT * FROM 'sensors/+'"
   sql_version = "2016-03-23"
   enabled     = true
 
@@ -145,5 +185,37 @@ resource "aws_iot_topic_rule" "to_sqs" {
   cloudwatch_logs {
     role_arn = local.iot_role_arn
     log_group_name = aws_cloudwatch_log_group.iot_logs.name
+  }
+}
+
+# Topic Rule 2: enrutar mensajes desde 'sensors/+' hacia DynamoDB (Hot Data)
+resource "aws_iot_topic_rule" "to_dynamodb" {
+  name        = "iot_rule_to_dynamodb_${replace(var.environment, "-", "_")}"
+  sql         = "SELECT *, timestamp() as ts FROM 'sensors/+'"
+  sql_version = "2016-03-23"
+  enabled     = true
+
+  dynamodb {
+    role_arn       = local.iot_role_arn
+    table_name     = aws_dynamodb_table.sensor_data.name
+    hash_key_field = "sensor_id"
+    range_key_field = "timestamp"
+    operation      = "PUT"
+  }
+}
+
+# Topic Rule 3: enrutar mensajes desde 'sensors/+' hacia S3 (Cold Data)
+# Los archivos se guardan con particionamiento por fecha: sensors/YYYY/MM/DD/HHmm-UUID.json
+resource "aws_iot_topic_rule" "to_s3" {
+  name        = "iot_rule_to_s3_${replace(var.environment, "-", "_")}"
+  sql         = "SELECT * FROM 'sensors/+'"
+  sql_version = "2016-03-23"
+  enabled     = true
+
+  s3 {
+    role_arn   = local.iot_role_arn
+    bucket_name = aws_s3_bucket.sensor_archive.id
+    key        = "sensors/\${year()}/\${month()}/\${day()}/\${hour()}\${minute()}-\${clientId()}.json"
+    canned_acl = "private"
   }
 }

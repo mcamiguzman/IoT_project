@@ -72,23 +72,29 @@ tf-import-existing:
 	@echo "✓ Intento de importación completado. Revisa errores y vuelve a ejecutar 'make deploy'."
 
 aws-logs:
-	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE, AWS_REGION, SINCE y FOLLOW=no)."
+	@echo "Siguiendo CloudWatch Logs (use LOG_GROUP, opcional PROFILE, AWS_REGION, SINCE, FOLLOW y LIMIT)."
 	@if [ -z "$(LOG_GROUP)" ]; then \
-		echo "ERROR: define LOG_GROUP. Ej: LOG_GROUP=/aws/iot/sensors/dev"; exit 1; \
+		echo "ERROR: define LOG_GROUP. Ej: LOG_GROUP=/aws/iot/sensors/dev"; \
+		echo ""; \
+		echo "Ejemplos:"; \
+		echo "  make aws-logs LOG_GROUP=/aws/iot/sensors/dev              # Sigue (--follow) los nuevos eventos"; \
+		echo "  make aws-logs LOG_GROUP=/aws/iot/sensors/dev FOLLOW=no   # Muestra últimos eventos sin seguir"; \
+		echo "  make aws-logs LOG_GROUP=/aws/iot/sensors/dev FOLLOW=no LIMIT=50"; \
+		exit 1; \
 	fi
-	@echo "Nota: aws logs tail esperará nuevos eventos hasta Ctrl+C si no hay salida inmediata."
-	@FOLLOW_FLAG=""; \
+	@FOLLOW_FLAG="--follow"; \
 	if [ "$(FOLLOW)" = "no" ]; then \
 		FOLLOW_FLAG=""; \
-	else \
-		FOLLOW_FLAG="--follow"; \
 	fi; \
+	SINCE_FLAG=""; \
 	if [ -n "$(SINCE)" ]; then \
 		SINCE_FLAG="--since $(SINCE)"; \
-	else \
-		SINCE_FLAG=""; \
 	fi; \
-	aws logs tail "$(LOG_GROUP)" $$FOLLOW_FLAG $$SINCE_FLAG --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
+	LIMIT_FLAG="--limit 100"; \
+	if [ -n "$(LIMIT)" ]; then \
+		LIMIT_FLAG="--limit $(LIMIT)"; \
+	fi; \
+	aws logs tail "$(LOG_GROUP)" $$FOLLOW_FLAG $$SINCE_FLAG $$LIMIT_FLAG --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
 
 logs: 
 	docker compose logs -f
