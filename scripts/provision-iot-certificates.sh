@@ -218,6 +218,16 @@ else
     echo "  ℹ Nota: Política no adjuntada (Terraform la adjuntará después)"
 fi
 
+# Copiar carpeta al directorio de MQTT Gateway
+GATEWAY_CERTS_DIR="./gateway/certs"
+if [ ! -d "$GATEWAY_CERTS_DIR" ]; then
+    mkdir -p "$GATEWAY_CERTS_DIR"
+fi
+cp "$CERT_FILE" "$GATEWAY_CERTS_DIR/"
+cp "$KEY_FILE" "$GATEWAY_CERTS_DIR/"
+cp "$ROOT_CA_FILE" "$GATEWAY_CERTS_DIR/"
+write_success "Certificados copiados a $GATEWAY_CERTS_DIR"
+
 # RESUMEN FINAL
 echo ""
 write_success "Provisioning completado exitosamente"

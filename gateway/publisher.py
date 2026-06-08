@@ -56,7 +56,11 @@ def discover_iot_endpoint():
                 print(f"✓ Endpoint detectado: {endpoint}")
                 return endpoint
         except Exception as e:
-            print(f"    Intento {attempt} falló: {str(e)[:100]}")
+            err_msg = str(e)
+            if "Unable to locate credentials" in err_msg:
+                print("    Credenciales AWS no encontradas. Verifica que ~/.aws/credentials exista en el host.")
+            else:
+                print(f"    Intento {attempt} falló: {err_msg[:100]}")
 
         time.sleep(backoff)
         backoff = min(backoff * 2, 30)
@@ -64,7 +68,7 @@ def discover_iot_endpoint():
     raise SystemExit(
         "ERROR: No se pudo descubrir AWS_IOT_ENDPOINT tras 10 intentos.\n"
         "Verifica que:\n"
-        "  - Las credenciales AWS estén exportadas (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)\n"
+        "  - El archivo ~/.aws/credentials exista en el host con credenciales válidas\n"
         "  - El token de Learner Lab no esté expirado\n"
         "  - Tengas permiso iot:DescribeEndpoint"
     )
@@ -89,7 +93,7 @@ def verify_certificates():
             print(m)
         print(
             "\nPara generar certificados, ejecuta:"
-            "\n  .\scripts\provision-iot-certificates.ps1"
+            r"\n  .\scripts\provision-iot-certificates.ps1"
             "\no en Linux/Mac:"
             "\n  bash scripts/provision-iot-certificates.sh"
         )

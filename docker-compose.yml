@@ -69,15 +69,11 @@ services:
       - PYTHONUNBUFFERED=1
       - AWS_REGION=us-east-1
       - AWS_DEFAULT_REGION=us-east-1
-      # Credenciales AWS opcionales. Si no se exportan en el shell,
-      # el gateway reenviara a Mosquitto local pero NO a AWS IoT.
-      # Para habilitar IoT, exporta antes:
-      #   $env:AWS_ACCESS_KEY_ID="..."
-      #   $env:AWS_SECRET_ACCESS_KEY="..."
-      #   $env:AWS_SESSION_TOKEN="..."   (si aplica)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY-}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN-}
+    volumes:
+      - ~/.aws:/root/.aws:ro
     networks:
       - iot-network
     restart: unless-stopped

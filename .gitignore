@@ -60,6 +60,9 @@ project_template/
 logs/
 *.log
 
+# Scripts con credenciales
+scripts/meow.sh
+
 # OS
 .DS_Store
 Thumbs.db

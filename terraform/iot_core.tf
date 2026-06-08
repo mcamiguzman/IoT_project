@@ -4,6 +4,13 @@ locals {
   iot_role_arn = var.iot_role_arn != "" ? var.iot_role_arn : aws_iam_role.iot_topic_rule_role[0].arn
 }
 
+# En AWS Learner Lab NO se pueden crear políticas IAM administradas.
+# LabRole ya tiene permisos suficientes (vía SCP de Learner Lab) para
+# todas las acciones requeridas: sqs:SendMessage, dynamodb:PutItem,
+# dynamodb:UpdateItem, s3:PutObject, s3:GetObject, logs:CreateLogStream,
+# logs:PutLogEvents. Por lo tanto no se necesita crear ni adjuntar
+# políticas adicionales.
+
 # Thing
 resource "aws_iot_thing" "sensor" {
   name = "${var.iot_thing_name}-${var.environment}"
@@ -109,64 +116,6 @@ resource "aws_iam_role_policy" "iot_topic_rule_policy" {
   })
 }
 
-# Política para el rol existente (LabRole) cuando se pasa por variable
-data "aws_iam_policy_document" "iot_topic_rule_extra" {
-  count = var.iot_role_arn != "" ? 1 : 0
-
-  statement {
-    sid    = "IoTToSQS"
-    effect = "Allow"
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.sensor_queue.arn]
-  }
-
-  statement {
-    sid    = "IoTToDynamoDB"
-    effect = "Allow"
-    actions = [
-      "dynamodb:PutItem",
-      "dynamodb:UpdateItem"
-    ]
-    resources = [aws_dynamodb_table.sensor_data.arn]
-  }
-
-  statement {
-    sid    = "IoTToS3"
-    effect = "Allow"
-    actions = [
-      "s3:PutObject",
-      "s3:GetObject"
-    ]
-    resources = ["${aws_s3_bucket.sensor_archive.arn}/*"]
-  }
-
-  statement {
-    sid    = "IoTToCloudWatch"
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-    resources = [
-      aws_cloudwatch_log_group.iot_logs.arn,
-      "${aws_cloudwatch_log_group.iot_logs.arn}:*"
-    ]
-  }
-}
-
-resource "aws_iam_policy" "iot_topic_rule_extra" {
-  count      = var.iot_role_arn != "" ? 1 : 0
-  name       = "iot-topic-rule-extra-${var.environment}"
-  policy     = data.aws_iam_policy_document.iot_topic_rule_extra[0].json
-  tags       = null
-}
-
-resource "aws_iam_role_policy_attachment" "iot_topic_rule_extra_attach" {
-  count      = var.iot_role_arn != "" ? 1 : 0
-  role       = split("/", var.iot_role_arn)[length(split("/", var.iot_role_arn)) - 1]
-  policy_arn = aws_iam_policy.iot_topic_rule_extra[0].arn
-}
-
 # Topic Rule 1: enrutar mensajes desde 'sensors/+' hacia la cola SQS
 # y también registrar cada mensaje en CloudWatch Logs para visibilidad.
 resource "aws_iot_topic_rule" "to_sqs" {
@@ -201,7 +150,7 @@ resource "aws_iot_topic_rule" "to_dynamodb" {
     hash_key_value  = "$${sensor_id}"
     range_key_field = "timestamp"
     range_key_value = "$${ts}"
-    operation       = "PutItem"
+    operation       = "INSERT"
   }
 }
 

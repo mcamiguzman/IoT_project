@@ -11,7 +11,6 @@ down:
 clean:
 	docker compose down -v
 	docker system prune -f
-	rm -rf terraform/.terraform
 	rm -rf terraform/*.tfstate*
 	rm -rf terraform/.lock.hcl
 	rm -rf lambdas/*.zip
@@ -27,6 +26,9 @@ build-lambdas:
 tf-init:
 	cd terraform && terraform init
 
+tf-validate:
+	cd terraform && terraform validate
+
 tf-apply: build-lambdas
 	cd terraform && terraform apply -auto-approve
 
@@ -34,7 +36,7 @@ tf-destroy:
 	cd terraform && terraform destroy -auto-approve
 	@echo "✓ Recursos AWS destruidos"
 
-deploy: tf-init tf-apply up
+deploy: tf-apply up
 	@echo "✓ Despliegue completado"
 	@echo "✓ Despliegue completado"
 
@@ -81,20 +83,24 @@ aws-logs:
 		echo "  make aws-logs LOG_GROUP=/aws/iot/sensors/dev FOLLOW=no   # Muestra últimos eventos sin seguir"; \
 		echo "  make aws-logs LOG_GROUP=/aws/iot/sensors/dev FOLLOW=no LIMIT=50"; \
 		exit 1; \
-	fi
-	@FOLLOW_FLAG="--follow"; \
-	if [ "$(FOLLOW)" = "no" ]; then \
-		FOLLOW_FLAG=""; \
 	fi; \
-	SINCE_FLAG=""; \
+	CMD="aws logs tail \"$(LOG_GROUP)\""; \
+	if [ "$(FOLLOW)" != "no" ]; then \
+		CMD="$$CMD --follow"; \
+	fi; \
 	if [ -n "$(SINCE)" ]; then \
-		SINCE_FLAG="--since $(SINCE)"; \
+		CMD="$$CMD --since $(SINCE)"; \
 	fi; \
-	LIMIT_FLAG="--limit 100"; \
+	LIMIT_VAL=100; \
 	if [ -n "$(LIMIT)" ]; then \
-		LIMIT_FLAG="--limit $(LIMIT)"; \
+		LIMIT_VAL="$(LIMIT)"; \
 	fi; \
-	aws logs tail "$(LOG_GROUP)" $$FOLLOW_FLAG $$SINCE_FLAG $$LIMIT_FLAG --region $(AWS_REGION) $(if $(PROFILE),--profile $(PROFILE),)
+	CMD="$$CMD --limit $$LIMIT_VAL"; \
+	CMD="$$CMD --region $(AWS_REGION)"; \
+	if [ -n "$(PROFILE)" ]; then \
+		CMD="$$CMD --profile $(PROFILE)"; \
+	fi; \
+	eval $$CMD
 
 logs: 
 	docker compose logs -f
